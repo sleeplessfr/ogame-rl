@@ -58,7 +58,7 @@ def _lg(x: float) -> float:
 FEATURES = ("income", "army", "defence", "tech", "loot", "planets", "score")
 PERSONALITIES = {
     "builder":  {"income": 1.0, "tech": 0.3, "planets": 0.5, "army": 0.1, "defence": 0.1, "loot": 0.0},
-    "raider":   {"income": 0.4, "army": 1.0, "loot": 1.0, "tech": 0.2, "planets": 0.3, "defence": 0.0},
+    "raider":   {"income": 0.4, "army": 0.4, "loot": 3.0, "tech": 0.2, "planets": 0.3, "defence": 0.0},
     "turtle":   {"income": 0.6, "defence": 1.0, "tech": 0.4, "planets": 0.3, "army": 0.0, "loot": 0.0},
     "scientist": {"income": 0.5, "tech": 1.0, "planets": 0.3, "army": 0.1, "defence": 0.2, "loot": 0.0},
     "score":    {"score": 1.0},

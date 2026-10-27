@@ -75,8 +75,10 @@ class NumpyPolicy:
             i += n
         return out
 
-    def act(self, env: MultiEnv, pid: int, obs: np.ndarray, theta: np.ndarray | None = None, rng: np.random.Generator | None = None) -> tuple:
-        """Greedy when rng is None, otherwise sampled."""
+    def act(self, env: MultiEnv, pid: int, obs: np.ndarray, theta: np.ndarray | None = None, rng: np.random.Generator | None = None,
+            explore: float = 0.0) -> tuple:
+        """Greedy when rng is None, otherwise sampled. With `explore` > 0 (and an rng) the kind of action is, with that chance,
+        drawn uniformly from the legal ones, so rare actions (spy, attack, colonise) show up often enough to be learned."""
         p = self._unpack(self.theta if theta is None else theta)
         masks = env.masks(pid)
         h = np.tanh(obs @ p["w1"] + p["b1"])
@@ -91,7 +93,10 @@ class NumpyPolicy:
 
         kind_ok = masks["kind"].copy()
         kind_ok = np.concatenate([kind_ok, np.zeros(HEADS[0] - len(kind_ok), dtype=bool)])
-        kind = pick(h @ p["wk"], kind_ok)
+        if explore > 0 and rng is not None and rng.random() < explore:
+            kind = int(rng.choice(np.flatnonzero(kind_ok)))
+        else:
+            kind = pick(h @ p["wk"], kind_ok)
         if kind == 0:
             return (0, 0, 0, 0)
         a = pick(h @ p["wa"], legal_a(env, pid, masks, kind))

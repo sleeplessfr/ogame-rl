@@ -22,7 +22,7 @@ ARGS = None
 
 
 def play(theta: np.ndarray, seed: int, days: float, opponents: int, hidden: int, personality: str = "raider", opp: str = "self",
-         mean_theta: np.ndarray | None = None, dt: float = 1800.0) -> dict:
+         mean_theta: np.ndarray | None = None, dt: float = 1800.0, explore: float = 0.0) -> dict:
     """One game. Player 0 is the learner (reward = its personality); the others are copies of the current mean policy
     (opp='self', sampled so they vary), plain builder bots (opp='eco') or random bots (opp='random')."""
     n = 1 + opponents
@@ -35,7 +35,7 @@ def play(theta: np.ndarray, seed: int, days: float, opponents: int, hidden: int,
     mean_pol = NumpyPolicy(hidden, mean_theta if mean_theta is not None else theta)
     total, done = 0.0, False
     while not done:
-        acts = {0: pol.act(env, 0, obs[0])}
+        acts = {0: pol.act(env, 0, obs[0], rng=rng if explore > 0 else None, explore=explore)}
         for i in range(1, n):
             acts[i] = mean_pol.act(env, i, obs[i], rng=rng) if opp == "self" else bots[i].act(env, i)
         obs, rew, done, _ = env.step(acts)
@@ -64,6 +64,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--personality", default="raider", choices=sorted(PERSONALITIES))
     ap.add_argument("--opp", default="self", choices=("self", "eco", "random"))
+    ap.add_argument("--explore", type=float, default=0.0, help="chance per step that the learner tries a random legal kind of action")
     ap.add_argument("--out", default="runs/es.npz")
     a = ap.parse_args()
     rng = np.random.default_rng(a.seed)
@@ -76,7 +77,7 @@ def main() -> None:
             world_seed = 1000 + gen
             eps = rng.normal(size=(a.population // 2, pol.size))
             eps = np.concatenate([eps, -eps])                               # antithetic pairs
-            jobs = [(theta + a.sigma * e, world_seed, a.days, a.opponents, a.hidden, a.personality, a.opp, theta) for e in eps]
+            jobs = [(theta + a.sigma * e, world_seed, a.days, a.opponents, a.hidden, a.personality, a.opp, theta, 1800.0, a.explore) for e in eps]
             res = pool.map(_job, jobs)
             fit = np.array([r["reward"] for r in res])                       # the personality's own reward (same world for everybody this generation)
             ranks = fit.argsort().argsort() / (len(fit) - 1) - 0.5
