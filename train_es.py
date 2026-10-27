@@ -14,20 +14,19 @@ from pathlib import Path
 import numpy as np
 
 from ogsim.bots import EcoBot, RandomBot
-from ogsim.env import PERSONALITIES, MultiEnv
+from ogsim.env import MultiEnv
 from ogsim.policy import NumpyPolicy
 from ogsim.world import Config
 
 ARGS = None
 
 
-def play(theta: np.ndarray, seed: int, days: float, opponents: int, hidden: int, personality: str = "raider", opp: str = "self",
+def play(theta: np.ndarray, seed: int, days: float, opponents: int, hidden: int, opp: str = "self",
          mean_theta: np.ndarray | None = None, dt: float = 1800.0, explore: float = 0.0) -> dict:
-    """One game. Player 0 is the learner (reward = its personality); the others are copies of the current mean policy
+    """One game. Player 0 is the learner (reward = the game's score); the others are copies of the current mean policy
     (opp='self', sampled so they vary), plain builder bots (opp='eco') or random bots (opp='random')."""
     n = 1 + opponents
-    pers = {i: PERSONALITIES[personality] for i in range(n)}
-    env = MultiEnv(Config(n_players=n, seed=seed, systems=60), decision_seconds=dt, horizon_seconds=days * 86400, personalities=pers)
+    env = MultiEnv(Config(n_players=n, seed=seed, systems=60), decision_seconds=dt, horizon_seconds=days * 86400)
     obs = env.reset()
     pol = NumpyPolicy(hidden, theta)
     rng = np.random.default_rng(seed)
@@ -62,7 +61,6 @@ def main() -> None:
     ap.add_argument("--hidden", type=int, default=64)
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--personality", default="raider", choices=sorted(PERSONALITIES))
     ap.add_argument("--opp", default="self", choices=("self", "eco", "random"))
     ap.add_argument("--explore", type=float, default=0.0, help="chance per step that the learner tries a random legal kind of action")
     ap.add_argument("--out", default="runs/es.npz")
@@ -77,9 +75,9 @@ def main() -> None:
             world_seed = 1000 + gen
             eps = rng.normal(size=(a.population // 2, pol.size))
             eps = np.concatenate([eps, -eps])                               # antithetic pairs
-            jobs = [(theta + a.sigma * e, world_seed, a.days, a.opponents, a.hidden, a.personality, a.opp, theta, 1800.0, a.explore) for e in eps]
+            jobs = [(theta + a.sigma * e, world_seed, a.days, a.opponents, a.hidden, a.opp, theta, 1800.0, a.explore) for e in eps]
             res = pool.map(_job, jobs)
-            fit = np.array([r["reward"] for r in res])                       # the personality's own reward (same world for everybody this generation)
+            fit = np.array([r["reward"] for r in res])                       # the game's own score (same world for everybody this generation)
             ranks = fit.argsort().argsort() / (len(fit) - 1) - 0.5
             theta = theta + a.lr / (a.population * a.sigma) * (eps.T @ ranks)
             m = lambda k: np.mean([r[k] for r in res])
