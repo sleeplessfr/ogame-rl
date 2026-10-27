@@ -68,11 +68,16 @@ class NumpyPolicy:
         return np.concatenate([p.ravel() for p in parts]).astype(np.float64)
 
     def _unpack(self, theta: np.ndarray) -> dict:
+        key = id(theta)
+        hit = getattr(self, "_cache", None)
+        if hit is not None and hit[0] == key and hit[1] is theta:
+            return hit[2]
         out, i = {}, 0
         for name, shape in self.shapes:
             n = int(np.prod(shape))
             out[name] = theta[i:i + n].reshape(shape)
             i += n
+        self._cache = (key, theta, out)
         return out
 
     def act(self, env: MultiEnv, pid: int, obs: np.ndarray, theta: np.ndarray | None = None, rng: np.random.Generator | None = None,

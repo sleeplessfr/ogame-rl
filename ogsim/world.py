@@ -210,11 +210,14 @@ class World:
         return p
 
     def requirements_met(self, pid: int, p: Planet, name: str) -> bool:
-        pl = self.players[pid]
-        need = (OBJECTS.get(name) or UNITS.get(name) or {}).get("requires", {})
-        for n, lvl in need.items():
-            have = pl.tech.get(n, 0) if OBJECTS.get(n, {}).get("kind") == "research" else p.lv.get(n, 0)
-            if have < lvl:
+        tech_need, build_need = _REQ[name]
+        tech = self.players[pid].tech
+        for n, lvl in tech_need:
+            if tech.get(n, 0) < lvl:
+                return False
+        lv = p.lv
+        for n, lvl in build_need:
+            if lv.get(n, 0) < lvl:
                 return False
         return True
 
@@ -625,6 +628,18 @@ class World:
                         "arrive": f.t_arrive, "return": f.t_return} for f in pl.fleets],
             "debris": {c: dict(d) for c, d in self.debris.items()},
         }
+
+
+def _split_requirements() -> dict:
+    out = {}
+    for name, o in {**UNITS, **OBJECTS}.items():
+        tech = tuple((n, l) for n, l in o["requires"].items() if OBJECTS.get(n, {}).get("kind") == "research")
+        build = tuple((n, l) for n, l in o["requires"].items() if OBJECTS.get(n, {}).get("kind") != "research")
+        out[name] = (tech, build)
+    return out
+
+
+_REQ = _split_requirements()
 
 
 class ActionError(Exception):
