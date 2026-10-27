@@ -158,3 +158,22 @@ class WorldTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ColonyRulesTest(unittest.TestCase):
+    def test_position_needs_astrophysics_and_cargo_arrives(self):
+        w = World(Config(n_players=2, seed=1, systems=20))
+        p = w.players[0].planets[0]
+        p.ships["colony_ship"] = 2
+        p.res.update(metal=1e6, crystal=1e6, deuterium=1e6)
+        w.players[0].tech["astrophysics"] = 2
+        sys_ = p.coord[1]
+        free = [pos for pos in range(1, 16) if (p.coord[0], sys_, pos) not in w.by_coord]
+        low = next(q for q in free if q in (1, 2, 3, 13, 14, 15))
+        with self.assertRaises(ActionError):
+            w.send_fleet(0, 0, "colonisation", (p.coord[0], sys_, low), {"colony_ship": 1})
+        mid = next(q for q in free if 4 <= q <= 12)
+        w.send_fleet(0, 0, "colonisation", (p.coord[0], sys_, mid), {"colony_ship": 1}, cargo={"metal": 5000})
+        w.advance(10 * 86400)
+        self.assertEqual(len(w.players[0].planets), 2)
+        self.assertGreater(w.players[0].planets[1].res["metal"], 5000)

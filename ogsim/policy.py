@@ -28,7 +28,8 @@ def legal_b(env: MultiEnv, pid: int, masks: dict, kind: int, a: int) -> np.ndarr
     elif kind in (4, 5):
         out[:len(env._targets[pid])] = True
     elif kind == 6:
-        out[:15] = True
+        for pos in range(1, 16):
+            out[pos - 1] = w.can_colonise_position(pid, pos)
     elif kind == 7:
         for s in range(len(pl.planets)):
             out[s] = s != a and s < MAXP

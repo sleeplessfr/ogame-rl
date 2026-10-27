@@ -370,6 +370,12 @@ class World:
     def fleet_slots(self, pid: int) -> int:
         return 1 + self.players[pid].tech.get("computer_technology", 0)
 
+    def can_colonise_position(self, pid: int, position: int) -> bool:
+        """The game's rule: positions 1/15 need astrophysics 8, 2/14 need 6, 3/13 need 4; 4-12 are free."""
+        astro = self.players[pid].tech.get("astrophysics", 0)
+        need = {1: 8, 15: 8, 2: 6, 14: 6, 3: 4, 13: 4}.get(position, 0)
+        return astro >= need
+
     def max_planets(self, pid: int) -> int:
         return self.cfg.max_planets_base + (self.players[pid].tech.get("astrophysics", 0) + 1) // 2
 
@@ -419,6 +425,8 @@ class World:
                 raise ActionError("the position is taken")
             if len(pl.planets) >= self.max_planets(pid):
                 raise ActionError("planet limit reached")
+            if not self.can_colonise_position(pid, target[2]):
+                raise ActionError("astrophysics too low for this position")
         if mission == "recycle" and not ships.get("recycler"):
             raise ActionError("needs recyclers")
         fuel = self.fuel_cost(pid, p.coord, target, ships, speed_pct)
@@ -479,8 +487,12 @@ class World:
 
     def _arrive_colonisation(self, f: Fleet) -> None:
         pl = self.players[f.owner]
-        if f.target not in self.by_coord and len(pl.planets) < self.max_planets(f.owner):
-            self._new_planet(f.owner, f.target, fields_for(f.target[2], self.rng), (500.0, 500.0, 0.0))
+        if f.target not in self.by_coord and len(pl.planets) < self.max_planets(f.owner) and self.can_colonise_position(f.owner, f.target[2]):
+            col = self._new_planet(f.owner, f.target, fields_for(f.target[2], self.rng), (500.0, 500.0, 0.0))
+            for r in RESOURCES:                      # whatever the colony ship carried goes to the new colony
+                if col is not None and f.cargo.get(r, 0) > 0:
+                    col.res[r] += f.cargo[r]
+                    f.cargo[r] = 0.0
             f.ships["colony_ship"] -= 1
             f.ships = {n: k for n, k in f.ships.items() if k > 0}
         self._go_home(f)
