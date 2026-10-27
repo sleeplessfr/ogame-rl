@@ -73,9 +73,11 @@ def main() -> None:
                 half = rng.normal(size=(a.population // 2, base.size))
                 eps = np.concatenate([half, -half])
                 eps_all[i] = eps
+                # common random numbers: every perturbation of this policy plays the same world against the same opponents,
+                # so score differences come from the perturbation and not from the draw
+                others = [thetas[k] for k in rng.choice([k for k in range(a.policies) if k != i], a.players - 1, replace=True)]
                 for j, e in enumerate(eps):
-                    others = [thetas[k] for k in rng.choice([k for k in range(a.policies) if k != i], a.players - 1, replace=True)]
-                    jobs.append({"theta": thetas[i] + a.sigma * e, "others": others, "seed": 5000 + gen * 31 + j % (a.population // 2),
+                    jobs.append({"theta": thetas[i] + a.sigma * e, "others": others, "seed": 5000 + gen * 31 + i,
                                  "days": a.days, "hidden": a.hidden, "explore": a.explore, "dt": a.dt, "systems": a.systems})
                     owner.append(i)
             res = pool.map(play, jobs)

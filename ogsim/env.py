@@ -9,7 +9,7 @@ Action = (kind, a, b, c), four small integers (see ACTION_NAMES / ARGS):
     0 noop
     1 build         a=planet slot  b=building
     2 research      b=technology
-    3 build units   a=planet slot  b=unit (ship or defence)   c=share of the affordable amount (SHARES)
+    3 build units   a=planet slot  b=unit (ship or defence)   c=how many (COUNTS: 1, 3, 10, 50, 250; limited to what is affordable)
     4 espionage     a=planet slot  b=target slot              c=number of probes (PROBES)
     5 attack        a=planet slot  b=target slot              c=share of the war fleet (and cargo ships) sent (FLEET_SHARES)
     6 colonise      a=planet slot  b=position 1..15           c=system offset (OFFSETS)
@@ -40,6 +40,7 @@ SHIPS = [n for n in UNIT_NAMES if UNITS[n]["kind"] == "ship"]
 WAR_SHIPS = [n for n in SHIPS if UNITS[n]["attack"] > 5]
 CARGO_SHIPS = [n for n in SHIPS if UNITS[n]["cargo"] >= 5000]
 SHARES = (0.1, 0.25, 0.5, 1.0)
+COUNTS = (1, 3, 10, 50, 250)   # how many units one order asks for (limited to what is affordable)
 FLEET_SHARES = (0.25, 0.5, 0.75, 1.0)
 PROBES = (1, 3, 5, 8)
 OFFSETS = (-2, -1, 0, 1, 2)
@@ -141,7 +142,7 @@ class MultiEnv:
                 p = w._planet_of(pid, a)
                 u = UNITS[name]
                 fit = min((int(p.res[r] // u[r]) for r in RESOURCES if u[r] > 0), default=0)
-                w.build_units(pid, a, name, max(1, int(fit * SHARES[c % 4])) if fit > 0 else 1)
+                w.build_units(pid, a, name, max(1, min(COUNTS[c % 5], fit)))
             elif kind in (4, 5):
                 tgt = self._target_planet(pid, b)
                 p = w._planet_of(pid, a)
