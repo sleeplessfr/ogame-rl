@@ -78,13 +78,15 @@ class NumpyPolicy:
     def act(self, env: MultiEnv, pid: int, obs: np.ndarray, theta: np.ndarray | None = None, rng: np.random.Generator | None = None,
             explore: float = 0.0) -> tuple:
         """Greedy when rng is None, otherwise sampled. With `explore` > 0 (and an rng) the kind of action is, with that chance,
-        drawn uniformly from the legal ones, so rare actions (spy, attack, colonise) show up often enough to be learned."""
+        drawn uniformly from the legal ones (and then also the planet, object and amount), so rare actions (spy, attack, colonise) show up often enough to be learned."""
         p = self._unpack(self.theta if theta is None else theta)
         masks = env.masks(pid)
         h = np.tanh(obs @ p["w1"] + p["b1"])
 
-        def pick(logits: np.ndarray, ok: np.ndarray) -> int:
+        def pick(logits: np.ndarray, ok: np.ndarray, uniform: bool = False) -> int:
             z = np.where(ok, logits, NEG)
+            if uniform:   # an exploration step: a uniformly random legal value (flat logits)
+                return int(rng.choice(np.flatnonzero(ok)))
             if rng is None:
                 return int(np.argmax(z))
             z = z - z.max()
@@ -93,15 +95,16 @@ class NumpyPolicy:
 
         kind_ok = masks["kind"].copy()
         kind_ok = np.concatenate([kind_ok, np.zeros(HEADS[0] - len(kind_ok), dtype=bool)])
-        if explore > 0 and rng is not None and rng.random() < explore:
+        random_step = explore > 0 and rng is not None and rng.random() < explore
+        if random_step:
             kind = int(rng.choice(np.flatnonzero(kind_ok)))
         else:
             kind = pick(h @ p["wk"], kind_ok)
         if kind == 0:
             return (0, 0, 0, 0)
-        a = pick(h @ p["wa"], legal_a(env, pid, masks, kind))
+        a = pick(np.zeros(HEADS[1]) if random_step else h @ p["wa"], legal_a(env, pid, masks, kind), random_step)
         onehot = np.zeros(HEADS[0])
         onehot[kind] = 1.0
-        b = pick(np.concatenate([h, onehot]) @ p["wb"], legal_b(env, pid, masks, kind, a))
-        c = pick(h @ p["wc"], np.ones(HEADS[3], dtype=bool))
+        b = pick(np.zeros(HEADS[2]) if random_step else np.concatenate([h, onehot]) @ p["wb"], legal_b(env, pid, masks, kind, a), random_step)
+        c = pick(np.zeros(HEADS[3]) if random_step else h @ p["wc"], np.ones(HEADS[3], dtype=bool), random_step)
         return (kind, a, b, c)
