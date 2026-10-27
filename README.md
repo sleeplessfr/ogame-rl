@@ -13,3 +13,13 @@ reinforcement-learning agents that start from nothing: no hand-written strategy,
 Run the tests: `python -m unittest discover -s tests`.
 
 Left out on purpose: moons, missiles, expeditions, ACS, officers, items, the merchant, vacation mode.
+
+## Playing on a real OGameX server (`real/`, `run_real.py`)
+`real/mirror.py` rebuilds, from the server's `/api/v1` endpoints, an ogsim `World` as one player sees it (his planets, queues, research, fleets, hostile
+fleets coming, the highscore with every player's main planet, espionage reports). Because it is a World, the trained observation, legal masks and
+action meanings come from the same code as in training; build / research / units / fleet actions are real API calls. `tests/test_real.py`
+checks that the observation (404 numbers) and masks read through the API JSON equal the simulator's. `real/fake_server.py` is an in-process
+stand-in for the API for testing. Not mirrored yet: debris fields (the API has none), battle counters (looted, ships lost).
+
+    python run_real.py --fake --weights runs/ppo4.npz --agents 8 --days 1          # check the loop without a server
+    python run_real.py --base-url http://localhost/api/v1 --weights runs/ppo4.npz --agents 20 --dt 600
