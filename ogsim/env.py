@@ -53,14 +53,28 @@ def _lg(x: float) -> float:
     return math.log1p(max(0.0, x)) / 12.0
 
 
+# What a personality cares about. Reward = sum over features of weight * growth, growth = change in log1p(feature) (scale free),
+# except `planets` (change in planet count). Features are things any real player can see in the game.
+FEATURES = ("income", "army", "defence", "tech", "loot", "planets", "score")
+PERSONALITIES = {
+    "builder":  {"income": 1.0, "tech": 0.3, "planets": 0.5, "army": 0.1, "defence": 0.1, "loot": 0.0},
+    "raider":   {"income": 0.4, "army": 1.0, "loot": 1.0, "tech": 0.2, "planets": 0.3, "defence": 0.0},
+    "turtle":   {"income": 0.6, "defence": 1.0, "tech": 0.4, "planets": 0.3, "army": 0.0, "loot": 0.0},
+    "scientist": {"income": 0.5, "tech": 1.0, "planets": 0.3, "army": 0.1, "defence": 0.2, "loot": 0.0},
+    "score":    {"score": 1.0},
+}
+
+
 class MultiEnv:
     def __init__(self, cfg: Config | None = None, decision_seconds: float = 900.0, horizon_seconds: float = 7 * 86400.0,
-                 reward_scale: float = 1.0, invalid_penalty: float = 0.001):
+                 reward_scale: float = 1.0, invalid_penalty: float = 0.001, personalities: dict[int, dict] | None = None):
         self.cfg = cfg or Config()
         self.dt, self.horizon = decision_seconds, horizon_seconds
         self.reward_scale, self.invalid_penalty = reward_scale, invalid_penalty
         self.world: World | None = None
+        self.personalities = personalities or {}          # player -> weights; players without one are rewarded by the game's score
         self._last_score: list[float] = []
+        self._last_feat: list[dict] = []
         self._targets: dict[int, list[int]] = {}
 
     @property
@@ -73,6 +87,7 @@ class MultiEnv:
         self.world = World(self.cfg)
         self._last_score = [0.0] * self.n
         self._targets = {}
+        self._last_feat = [self.features(i) for i in range(self.n)]
         self._refresh_targets()
         return {i: self.observe(i) for i in range(self.n)}
 
@@ -90,10 +105,43 @@ class MultiEnv:
         obs, rew, info = {}, {}, {"valid": ok}
         for i in range(self.n):
             sc = w.players[i].score
-            rew[i] = (sc - self._last_score[i]) * self.reward_scale - (self.invalid_penalty if ok.get(i) is False else 0.0)
+            if i in self.personalities:
+                f = self.features(i)
+                r = self._growth(self.personalities[i], self._last_feat[i], f)
+                self._last_feat[i] = f
+            else:
+                r = sc - self._last_score[i]
+            rew[i] = r * self.reward_scale - (self.invalid_penalty if ok.get(i) is False else 0.0)
             self._last_score[i] = sc
             obs[i] = self.observe(i)
         return obs, rew, w.t >= self.horizon, info
+
+    def features(self, pid: int) -> dict:
+        """What the personality weights look at: hourly income worth, ship value, defence value, research spent, loot taken, planets, score."""
+        from .econ import worth, price
+        w = self.world
+        pl = w.players[pid]
+        income = army = defence = 0.0
+        for p in pl.planets:
+            w.sync(p)
+            income += worth({r: p.rate[r] * 3600 for r in RESOURCES})
+            army += sum((UNITS[n]["metal"] + UNITS[n]["crystal"] + UNITS[n]["deuterium"]) * k for n, k in p.ships.items())
+            defence += sum((UNITS[n]["metal"] + UNITS[n]["crystal"] + UNITS[n]["deuterium"]) * k for n, k in p.defs.items())
+        for f in pl.fleets:
+            army += sum((UNITS[n]["metal"] + UNITS[n]["crystal"] + UNITS[n]["deuterium"]) * k for n, k in f.ships.items())
+        tech = sum(sum(price(t, l).values()) for t, lv in pl.tech.items() for l in range(1, lv + 1))
+        return {"income": income, "army": army, "defence": defence, "tech": tech, "loot": pl.looted, "planets": float(len(pl.planets)),
+                "score": pl.score}
+
+    @staticmethod
+    def _growth(weights: dict, before: dict, after: dict) -> float:
+        total = 0.0
+        for k, wt in weights.items():
+            if k == "planets":
+                total += wt * (after[k] - before[k])
+            else:
+                total += wt * (math.log1p(max(0.0, after[k]) / 1000.0) - math.log1p(max(0.0, before[k]) / 1000.0))
+        return total
 
     def _refresh_targets(self) -> None:
         w = self.world
