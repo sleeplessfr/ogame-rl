@@ -143,8 +143,12 @@ def main() -> None:
         threads.append(th)
         time.sleep(0.5)
     try:
+        last = 0.0
         while True:
-            time.sleep(60)
+            time.sleep(1)                   # short sleeps: Ctrl+C is only noticed between sleeps on Windows
+            if time.monotonic() - last < 60:
+                continue
+            last = time.monotonic()
             ok = sum(1 for v in stats.values() if "action" in v)
             print(time.strftime("%H:%M:%S"), f"{ok}/{len(stats)} agents ok;",
                   "mean score %.1f" % np.mean([v["score"] for v in stats.values() if "score" in v] or [0]), flush=True)
