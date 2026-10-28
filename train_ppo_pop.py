@@ -89,8 +89,12 @@ def main() -> None:
     nets = [Net(args.hidden, args.seed + k) for k in range(K)]
     if args.resume:
         st = dict(np.load(args.resume))
-        for n in nets:
-            n.load(st)
+        if "p0_W1" in st:      # a population file: network k continues from its own weights
+            for k, n in enumerate(nets):
+                n.load({key[len(f"p{k}_"):]: v for key, v in st.items() if key.startswith(f"p{k}_")})
+        else:
+            for n in nets:
+                n.load(st)
     rng = np.random.default_rng(args.seed)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     pool = Pool(args.workers)
