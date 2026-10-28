@@ -29,7 +29,7 @@ def rollout(job: dict) -> dict:
     rng = np.random.default_rng(job["seed"])
     owner = rng.permutation([i % K for i in range(n)])          # seat -> policy, new every game
     groups = [[s for s in range(n) if owner[s] == k] for k in range(K)]
-    env = MultiEnv(Config(n_players=n, seed=job["seed"], systems=job["systems"]), decision_seconds=job["dt"], horizon_seconds=job["days"] * 86400)
+    env = MultiEnv(Config(n_players=n, seed=job["seed"], systems=job["systems"], galaxies=job["galaxies"], fleet_speed=job["fleet_speed"]), decision_seconds=job["dt"], horizon_seconds=job["days"] * 86400)
     obs = env.reset()
     recs = [[] for _ in range(K)]
     rews = []
@@ -73,6 +73,8 @@ def main() -> None:
     ap.add_argument("--days", type=float, default=14.0)
     ap.add_argument("--dt", type=float, default=600.0)
     ap.add_argument("--systems", type=int, default=60)
+    ap.add_argument("--galaxies", type=int, default=1)
+    ap.add_argument("--fleet-speed", type=float, default=5.0, help="the real server of the owner runs at 1")
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--ent", type=float, default=0.03)
@@ -101,7 +103,7 @@ def main() -> None:
     t0 = time.time()
     for it in range(1, args.iters + 1):
         jobs = [dict(states=[n.state() for n in nets], hidden=args.hidden, players=args.players, seed=args.seed * 100000 + it * 100 + g,
-                     systems=args.systems, dt=args.dt, days=args.days, gamma=args.gamma, lam=args.lam, rscale=args.rscale) for g in range(args.games)]
+                     systems=args.systems, galaxies=args.galaxies, fleet_speed=args.fleet_speed, dt=args.dt, days=args.days, gamma=args.gamma, lam=args.lam, rscale=args.rscale) for g in range(args.games)]
         res = pool.map(rollout, jobs)
         line = []
         for k in range(K):
