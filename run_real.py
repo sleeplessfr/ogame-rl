@@ -23,11 +23,19 @@ from real.api import ApiClient, ApiError
 from real.mirror import RealEnv
 
 
-def load_net(path: str) -> Net:
+def load_nets(path: str) -> list[Net]:
+    """One network from a plain .npz, or every network of a population file (keys p0_W1, p1_W1, ...)."""
     st = dict(np.load(path))
-    net = Net(st["W1"].shape[1])
-    net.load(st)
-    return net
+    groups = sorted({k.split("_", 1)[0] for k in st if k[0] == "p" and "_" in k and k.split("_", 1)[0][1:].isdigit()}, key=lambda g: int(g[1:]))
+    if not groups:
+        groups = [""]
+    nets = []
+    for g in groups:
+        sub = {k[len(g) + 1:] if g else k: v for k, v in st.items() if (k.startswith(g + "_") if g else True)}
+        net = Net(sub["W1"].shape[1])
+        net.load(sub)
+        nets.append(net)
+    return nets
 
 
 def login(base: str, email: str, password: str, tokens: dict, path: Path) -> ApiClient:
@@ -103,7 +111,7 @@ def main() -> None:
     ap.add_argument("--days", type=float, default=2.0, help="(--fake) game days to play")
     ap.add_argument("--systems", type=int, default=60)
     args = ap.parse_args()
-    nets = [load_net(w) for w in args.weights]
+    nets = [n for w in args.weights for n in load_nets(w)]
     if args.fake:
         return run_fake(args, nets)
     tpath = Path(args.tokens)
