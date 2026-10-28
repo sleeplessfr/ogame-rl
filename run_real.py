@@ -63,7 +63,7 @@ class Highscore:
             return self.rows
 
 
-def agent_loop(env: RealEnv, net: Net, hs: Highscore, stop: threading.Event, dt: float, seed: int, stats: dict, key: str) -> None:
+def agent_loop(env: RealEnv, net: Net, hs: Highscore, stop: threading.Event, dt: float, seed: int, stats: dict, key: str, verbose: bool = False) -> None:
     rng = np.random.default_rng(seed)
     while not stop.is_set():
         t0 = time.monotonic()
@@ -71,6 +71,14 @@ def agent_loop(env: RealEnv, net: Net, hs: Highscore, stop: threading.Event, dt:
             obs = env.refresh(hs.get(env))
             acts, _ = net.act(env, [0], {0: obs}, rng)
             ok = env.act(0, acts[0])
+            if verbose or not ok:
+                from ogsim.env import ACTION_NAMES, BUILDINGS, TECHS, UNIT_NAMES
+                kind, a_, b_, c_ = acts[0]
+                what = {1: BUILDINGS, 2: TECHS, 3: UNIT_NAMES}.get(kind)
+                label = f"{ACTION_NAMES[kind]} planet#{a_} {what[b_] if what else (b_, c_)}"
+                if kind != 0:
+                    why = "" if ok else "  REFUSED: " + (env.world.api_errors[-1] if env.world.api_errors else "illegal in the mirror")
+                    print(time.strftime("%H:%M:%S"), key.split("@")[0], label, "ok" if ok else "", why, flush=True)
             stats[key] = {"action": acts[0], "ok": ok, "score": env.world.players[0].score, "planets": len(env.world.players[0].planets)}
         except ApiError as e:
             stats[key] = {"error": str(e)}
@@ -114,6 +122,7 @@ def main() -> None:
     ap.add_argument("--tokens", default="runs/tokens.json")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--fake", action="store_true")
+    ap.add_argument("--verbose", action="store_true", help="print every action of every agent (refused ones are always printed)")
     ap.add_argument("--days", type=float, default=2.0, help="(--fake) game days to play")
     ap.add_argument("--systems", type=int, default=60)
     args = ap.parse_args()
@@ -129,7 +138,7 @@ def main() -> None:
         email = f"agent{i + 1:03d}@agents.local"
         client = login(args.base_url, email, args.password, tokens, tpath)
         env = RealEnv(client, decision_seconds=args.dt)
-        th = threading.Thread(target=agent_loop, args=(env, nets[i % len(nets)], hs, stop, args.dt, args.seed + i, stats, email), daemon=True)
+        th = threading.Thread(target=agent_loop, args=(env, nets[i % len(nets)], hs, stop, args.dt, args.seed + i, stats, email, args.verbose), daemon=True)
         th.start()
         threads.append(th)
         time.sleep(0.5)
