@@ -74,8 +74,14 @@ def agent_loop(env: RealEnv, net: Net, hs: Highscore, stop: threading.Event, dt:
             stats[key] = {"action": acts[0], "ok": ok, "score": env.world.players[0].score, "planets": len(env.world.players[0].planets)}
         except ApiError as e:
             stats[key] = {"error": str(e)}
+            print(time.strftime("%H:%M:%S"), key, "API error:", e, flush=True)
             if e.code == "rate_limited":
                 stop.wait(e.details.get("retry_after", 20))
+        except Exception as e:      # never let one agent die silently
+            import traceback
+            stats[key] = {"error": repr(e)}
+            print(time.strftime("%H:%M:%S"), key, "ERROR:", repr(e), flush=True)
+            traceback.print_exc()
         stop.wait(max(0.0, dt - (time.monotonic() - t0)))
 
 

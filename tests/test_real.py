@@ -63,3 +63,25 @@ class MirrorTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PhpEmptyArrayTest(unittest.TestCase):
+    def test_empty_php_arrays_arrive_as_lists(self):
+        from real.mirror import as_dict
+        self.assertEqual(as_dict([]), {})
+        self.assertEqual(as_dict(None), {})
+        self.assertEqual(as_dict({"a": 1}), {"a": 1})
+
+    def test_planet_without_buildings_or_units(self):
+        sim = played_world(days=1)
+        client = FakeClient(sim.world, 0)
+        orig = client.get
+
+        def get(path):
+            d = orig(path)
+            if path.startswith("/planets/"):
+                d = dict(d, buildings=[], units=[])      # what PHP sends for an empty array
+            return d
+        client.get = get
+        real = RealEnv(client, decision_seconds=900)
+        real.refresh()

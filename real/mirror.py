@@ -19,6 +19,11 @@ from ogsim.econdata import OBJECTS
 from .api import ApiClient, ApiError
 
 RESOURCES = ("metal", "crystal", "deuterium")
+
+
+def as_dict(x) -> dict:
+    """PHP encodes an empty array as [] instead of {}: treat any list (or None) as an empty mapping."""
+    return x if isinstance(x, dict) else {}
 MISSION_FROM_API = {"attack": "attack", "espionage": "espionage", "transport": "transport", "colonisation": "colonisation", "recycle": "recycle"}
 
 
@@ -81,7 +86,7 @@ class MirrorWorld(World):
                 pass
         self.cfg.n_players = len(self.players)
         # my planets
-        me.tech = {k: int(v) for k, v in status["research"]["levels"].items() if int(v) > 0}
+        me.tech = {k: int(v) for k, v in as_dict(status["research"]["levels"]).items() if int(v) > 0}
         rq = [q for q in status["research"]["queue"]]
         me.rq = None
         if rq:
@@ -95,15 +100,15 @@ class MirrorWorld(World):
             self.api_planet_ids.append(pid)
             det = (planet_details or {}).get(pid) or c.get(f"/planets/{pid}")
             co = sp["coordinates"]
-            lv = {k: int(v) for k, v in det.get("buildings", {}).items()}
+            lv = {k: int(v) for k, v in as_dict(det.get("buildings")).items()}
             terra = lv.get("terraformer", 0)
             base = int(sp["fields"]["max"]) - (terra * 5 + terra // 2)
             p = Planet(pid, 0, (co["galaxy"], co["system"], co["position"]), base,
                        tuple(float(sp["resources"][r]) for r in RESOURCES))
             p.t = self.t
             p.lv = lv
-            p.ships = {n: int(k) for n, k in det.get("units", {}).items() if n in UNITS and UNITS[n]["kind"] == "ship"}
-            p.defs = {n: int(k) for n, k in det.get("units", {}).items() if n in UNITS and UNITS[n]["kind"] == "defense"}
+            p.ships = {n: int(k) for n, k in as_dict(det.get("units")).items() if n in UNITS and UNITS[n]["kind"] == "ship"}
+            p.defs = {n: int(k) for n, k in as_dict(det.get("units")).items() if n in UNITS and UNITS[n]["kind"] == "defense"}
             p.rate = {r: float(sp["production_per_hour"][r]) / 3600.0 for r in RESOURCES}
             p.cap = {r: int(sp["storage"][r]) for r in RESOURCES}
             bq = [q for q in sp.get("building_queue", [])]
@@ -129,7 +134,7 @@ class MirrorWorld(World):
             frm = (m["from"]["galaxy"], m["from"]["system"], m["from"]["position"])
             if m.get("is_mine"):
                 me.fleets.append(Fleet(int(m["id"]), 0, int(m["from"].get("planet_id") or 0), to, MISSION_FROM_API.get(m["mission"], m["mission"]),
-                                       dict(m.get("ships", {})), dict(m.get("resources", {})), self.t - 1, self.t + float(m["seconds_remaining"]),
+                                       dict(as_dict(m.get("ships"))), dict(as_dict(m.get("resources"))), self.t - 1, self.t + float(m["seconds_remaining"]),
                                        self.t + float(m["seconds_remaining"]), "back" if m.get("is_return") else "out"))
             elif to in mine_coords and m["mission"] in ("attack", "espionage") and not m.get("is_return"):
                 self._incoming.append({"mission": m["mission"], "from": frm, "arrives_in": float(m["seconds_remaining"]), "ships": 1})
@@ -143,15 +148,15 @@ class MirrorWorld(World):
         if seat is None:
             return
         entry = {"t": float(rep.get("t", self.t)), "target": (t["galaxy"], t["system"], t["position"]), "owner": seat,
-                 "resources": {r: int((rep.get("resources") or {}).get(r, 0)) for r in RESOURCES}}
+                 "resources": {r: int(as_dict(rep.get("resources")).get(r, 0)) for r in RESOURCES}}
         if rep.get("ships") is not None:
-            entry["ships"] = {n: int(k) for n, k in rep["ships"].items() if n in UNITS}
+            entry["ships"] = {n: int(k) for n, k in as_dict(rep["ships"]).items() if n in UNITS}
         if rep.get("defense") is not None:
-            entry["defense"] = {n: int(k) for n, k in rep["defense"].items() if n in UNITS}
+            entry["defense"] = {n: int(k) for n, k in as_dict(rep["defense"]).items() if n in UNITS}
         if rep.get("buildings"):
-            entry["buildings"] = dict(rep["buildings"])
+            entry["buildings"] = dict(as_dict(rep["buildings"]))
         if rep.get("research"):
-            entry["research"] = dict(rep["research"])
+            entry["research"] = dict(as_dict(rep["research"]))
         self.players[0].intel.append(entry)
 
     # ---- the pieces of World that differ for a real game --------------------------------------------------------------
